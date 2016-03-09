@@ -24,7 +24,7 @@
 &emsp;&emsp;在`BSP`中，一次计算过程由一系列全局超步组成，每一个超步由并发计算、通信和同步三个步骤组成。同步完成，标志着这个超步的完成及下一个超步的开始。
 `BSP`模式的准则是批量同步(`bulk synchrony`)，其独特之处在于超步(`superstep`)概念的引入。一个`BSP`程序同时具有水平和垂直两个方面的结构。从垂直上看,一个`BSP`程序由一系列串行的超步(`superstep`)组成,如图所示:
 
-<div  align="center"><img src="imgs/1.1.png" width = "580" height = "450" alt="1.1" align="center" /></div><br />
+<div  align="center"><img src="imgs/1.1.png" width = "380" height = "300" alt="1.1" align="center" /></div><br />
 
 &emsp;&emsp;从水平上看，在一个超步中，所有的进程并行执行局部计算。一个超步可分为三个阶段，如图所示:
 
@@ -126,3 +126,12 @@ if (converged(A(v).PR)) voteToHalt(v)
 def Scatter(v, j) = A(v).PR / A(v).NumLinks
 ```
 
+&emsp;&emsp;由于`gather/scatter`函数是以单条边为操作粒度，所以对于一个顶点的众多邻边，可以分别由相应的节点独立调用`gather/scatter`函数。这一设计主要是为了适应点分割的图存储模式，从而避免`Pregel`模型会遇到的问题。
+
+# 3 参考文献
+
+【1】[Preg el: A System for Larg e-Scale Graph Processing](docs/pregel-a_system_for_large-scale_graph_processing.pdf)
+
+【2】[快刀初试：Spark GraphX在淘宝的实践](http://www.csdn.net/article/2014-08-07/2821097)
+
+【3】[GraphLab:A New Parallel Framework for Machine Learning](http://www.select.cs.cmu.edu/code/graphlab/)
