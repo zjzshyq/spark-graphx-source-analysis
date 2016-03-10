@@ -9,9 +9,13 @@
 
 * [GraphX简介](graphx-introduce.md)
 
-* [GraphX点切分详解](vertex-cut.md)
+* [GraphX点切分存储](vertex-cut.md)
 
-* [GraphX的图运算操作分析](operators/readme.md)
+* [GraphX中的vertices、edges以及triplets](vertex-edge-triple.md)
+
+* [Graph的构建](build-graph.md)
+
+* [GraphX的图运算操作](operators/readme.md)
 
     * [属性操作](operators/attributes.md)
     
