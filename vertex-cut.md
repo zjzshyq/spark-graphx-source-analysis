@@ -17,4 +17,96 @@ case object RandomVertexCut extends PartitionStrategy {
     }
   }
 ```
-&emsp;&emsp;这个方法比较简单，通过取源顶点和目标顶点`id`的哈希值来将边分配到不同的分区。
+&emsp;&emsp;这个方法比较简单，通过取源顶点和目标顶点`id`的哈希值来将边分配到不同的分区。这个方法会产生一个随机的边分割，两个顶点之间相同方向的边会分配到同一个分区。
+
+## 2 CanonicalRandomVertexCut
+
+```scala
+case object CanonicalRandomVertexCut extends PartitionStrategy {
+    override def getPartition(src: VertexId, dst: VertexId, numParts: PartitionID): PartitionID = {
+      if (src < dst) {
+        math.abs((src, dst).hashCode()) % numParts
+      } else {
+        math.abs((dst, src).hashCode()) % numParts
+      }
+    }
+  }
+```
+&emsp;&emsp;这种分割方法和前一种方法没有本质的不同。不同的是，哈希值的产生带有确定的方向。两个顶点之间所有的边都会分配到同一个分区，而不管方向如何。
+
+## 3 EdgePartition1D
+
+```scala
+case object EdgePartition1D extends PartitionStrategy {
+    override def getPartition(src: VertexId, dst: VertexId, numParts: PartitionID): PartitionID = {
+      val mixingPrime: VertexId = 1125899906842597L
+      (math.abs(src * mixingPrime) % numParts).toInt
+    }
+  }
+```
+&emsp;&emsp;这种方法仅仅根据源顶点`id`来将边分配到不同的分区。有相同源顶点的边会分配到同一分区。
+
+## 4 EdgePartition2D
+
+```scala
+case object EdgePartition2D extends PartitionStrategy {
+    override def getPartition(src: VertexId, dst: VertexId, numParts: PartitionID): PartitionID = {
+      val ceilSqrtNumParts: PartitionID = math.ceil(math.sqrt(numParts)).toInt
+      val mixingPrime: VertexId = 1125899906842597L
+      if (numParts == ceilSqrtNumParts * ceilSqrtNumParts) {
+        // Use old method for perfect squared to ensure we get same results
+        val col: PartitionID = (math.abs(src * mixingPrime) % ceilSqrtNumParts).toInt
+        val row: PartitionID = (math.abs(dst * mixingPrime) % ceilSqrtNumParts).toInt
+        (col * ceilSqrtNumParts + row) % numParts
+      } else {
+        // Otherwise use new method
+        val cols = ceilSqrtNumParts
+        val rows = (numParts + cols - 1) / cols
+        val lastColRows = numParts - rows * (cols - 1)
+        val col = (math.abs(src * mixingPrime) % numParts / rows).toInt
+        val row = (math.abs(dst * mixingPrime) % (if (col < cols - 1) rows else lastColRows)).toInt
+        col * rows + row
+      }
+    }
+  }
+```
+&emsp;&emsp;这种分割方法同时使用到了源顶点`id`和目的顶点`id`。它使用稀疏边连接矩阵的2维区分来将边分配到不同的分区，从而保证顶点的备份数不大于`2 * sqrt(numParts)`的限制。这里`numParts`表示分区数。
+这个方法的实现分两种情况，即分区数能完全开方和不能完全开方两种情况。当分区数能完全开方时，采用下面的方法：
+
+```scala
+ val col: PartitionID = (math.abs(src * mixingPrime) % ceilSqrtNumParts).toInt
+ val row: PartitionID = (math.abs(dst * mixingPrime) % ceilSqrtNumParts).toInt
+ (col * ceilSqrtNumParts + row) % numParts
+```
+
+&emsp;&emsp;当分区数不能完全开方时，采用下面的方法。这个方法的最后一列允许拥有不同的行数。
+
+```scala
+val cols = ceilSqrtNumParts
+val rows = (numParts + cols - 1) / cols
+//最后一列允许不同的行数
+val lastColRows = numParts - rows * (cols - 1)
+val col = (math.abs(src * mixingPrime) % numParts / rows).toInt
+val row = (math.abs(dst * mixingPrime) % (if (col < cols - 1) rows else lastColRows)).toInt
+col * rows + row
+```
+&emsp;&emsp;下面举个例子来说明该方法。假设我们有一个拥有12个顶点的图，要把它分配到9台机器。我们可以用下面的稀疏矩阵来表示
+
+```
+          __________________________________
+     v0   | P0 *     | P1       | P2    *  |
+     v1   |  ****    |  *       |          |
+     v2   |  ******* |      **  |  ****    |
+     v3   |  *****   |  *  *    |       *  |
+          ----------------------------------
+     v4   | P3 *     | P4 ***   | P5 **  * |
+     v5   |  *  *    |  *       |          |
+     v6   |       *  |      **  |  ****    |
+     v7   |  * * *   |  *  *    |       *  |
+          ----------------------------------
+     v8   | P6   *   | P7    *  | P8  *   *|
+     v9   |     *    |  *    *  |          |
+     v10  |       *  |      **  |  *  *    |
+     v11  | * <-E    |  ***     |       ** |
+          ----------------------------------
+```
