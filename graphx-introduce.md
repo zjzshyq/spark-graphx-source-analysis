@@ -147,7 +147,7 @@ val facts: RDD[String] =
 facts.collect.foreach(println(_))
 ```
 
-# 3 GraphX底层设计的核心点
+## 3 GraphX底层设计的核心点
 
 - 1 对`Graph`视图的所有操作，最终都会转换成其关联的`Table`视图的`RDD`操作来完成。一个图的计算在逻辑上等价于一系列`RDD`的转换过程。因此，`Graph`最终具备了`RDD`的3个关键特性：不变性、分布性和容错性。其中最关键的是不变性。逻辑上，所有图的转换和操作都产生了一个新图；物理上，`GraphX`会有一定程度的不变顶点和边的复用优化，对用户透明。
 
@@ -155,7 +155,7 @@ facts.collect.foreach(println(_))
 
 - 3 图的分布式存储采用点分割模式，而且使用`partitionBy`方法，由用户指定不同的划分策略。下一章会具体讲到划分策略。
 
-# 4 参考文献
+## 4 参考文献
 
 【1】[spark graphx参考文献](https://github.com/endymecy/spark-programming-guide-zh-cn/tree/master/graphx-programming-guide)
 
