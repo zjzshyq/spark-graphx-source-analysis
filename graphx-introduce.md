@@ -74,88 +74,29 @@ abstract class EdgeRDD[ED](
     deps: Seq[Dependency[_]]) extends RDD[Edge[ED]](sc, deps)
 ```
 
-### 2.1 属性图的例子
+## 3 GraphX的图存储模式
 
-&emsp;&emsp;假设我们想构造一个包括`GraphX`项目中不同合作者的属性图。顶点属性可能包含用户名和职业。我们可以用描述合作者之间关系的字符串标注边。
+&emsp;&emsp;`Graphx`借鉴`PowerGraph`，使用的是`Vertex-Cut`( 点分割 ) 方式存储图，用三个`RDD`存储图数据信息：
 
-<div  align="center"><img src="imgs/2.4.png" width = "600" height = "370" alt="2.4" align="center" /></div><br />
+- `VertexTable(id, data)`：`id`为顶点`id`， `data`为边属性
 
-&emsp;&emsp;生成的图有如下类型签名：
+- `EdgeTable(pid, src, dst, data)`：`pid` 为分区`id` ，`src`为原顶点`id` ，`dst`为目的顶点`id`
 
-```scala
-val userGraph: Graph[(String, String), String]
-```
-&emsp;&emsp;用一个原始文件、RDD构造一个属性图有很多方法。最一般的方法是使用用[Graph object](https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.graphx.Graph$)。
-下面的代码从RDD集合生成属性图。
+- `RoutingTable(id, pid)`：`id` 为顶点`id` ，`pid` 为分区`id`
 
-```scala
-// 假设 SparkContext 已经被创建
-val sc: SparkContext
-// 创建顶点RDD
-val users: RDD[(VertexId, (String, String))] =
-  sc.parallelize(Array((3L, ("rxin", "student")), (7L, ("jgonzal", "postdoc")),
-                       (5L, ("franklin", "prof")), (2L, ("istoica", "prof"))))
-// 创建边RDD
-val relationships: RDD[Edge[String]] =
-  sc.parallelize(Array(Edge(3L, 7L, "collab"),    Edge(5L, 3L, "advisor"),
-                       Edge(2L, 5L, "colleague"), Edge(5L, 7L, "pi")))
-// 默认关系
-val defaultUser = ("John Doe", "Missing")
-// 初始化图
-val graph = Graph(users, relationships, defaultUser)
-```
-&emsp;&emsp;在上面的例子中，我们用到了[Edge](https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.graphx.Edge)样本类。`Edge`类有一个`srcId`和`dstId`分别对应
-于源和目标顶点的标示符。另外，`Edge`类有一个`attr`成员用来存储边属性。
+&emsp;&emsp;点分割存储实现如下图所示：
 
-&emsp;&emsp;我们可以分别用`graph.vertices`和`graph.edges`成员将一个图解构为相应的顶点和边。
+<div  align="center"><img src="imgs/2.4.png" width = "600" height = "370" alt="2.3" align="center" /></div><br />
 
-```scala
-val graph: Graph[(String, String), String] // Constructed from above
-// 计算满足条件的用户数
-graph.vertices.filter { case (id, (name, pos)) => pos == "postdoc" }.count
-// 满足条件的边数
-graph.edges.filter(e => e.srcId > e.dstId).count
-```
-
-```
-
-注意，`graph.vertices`返回一个`VertexRDD[(String, String)]`，它继承于`RDD[(VertexID, (String, String))]`。所以我们可以用`scala`的`case`表达式解构这个元组。另一方面，
-`graph.edges`返回一个包含`Edge[String]`对象的`EdgeRDD`。我们也可以用到`case`类的类型构造器，如下例所示。
-
-graph.edges.filter { case Edge(src, dst, prop) => src > dst }.count
-```
-
-&emsp;&emsp;除了属性图的顶点和边视图，`GraphX`也包含了一个三元组视图，三元视图逻辑上将顶点和边的属性保存为一个`RDD[EdgeTriplet[VD, ED]]`，它包含[EdgeTriplet](https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.graphx.EdgeTriplet)类的实例。
-可以通过下面的`Sql`表达式表示这个三元视图的含义。
-```sql
-SELECT src.id, dst.id, src.attr, e.attr, dst.attr
-FROM edges AS e LEFT JOIN vertices AS src, vertices AS dst
-ON e.srcId = src.Id AND e.dstId = dst.Id
-```
-&emsp;&emsp;或者通过下面的图来表示：
-
-<div  align="center"><img src="imgs/2.5.png" width = "500" height = "50" alt="2.5" align="center" /></div><br />
-
-&emsp;&emsp;`EdgeTriplet`类继承于`Edge`类，并且加入了`srcAttr`和`dstAttr`成员，这两个成员分别包含源和目的顶点的属性。
-
-```scala
-val graph: Graph[(String, String), String] // Constructed from above
-// Use the triplets view to create an RDD of facts.
-val facts: RDD[String] =
-  graph.triplets.map(triplet =>
-    triplet.srcAttr._1 + " is the " + triplet.attr + " of " + triplet.dstAttr._1)
-facts.collect.foreach(println(_))
-```
-
-## 3 GraphX底层设计的核心点
+## 4 GraphX底层设计的核心点
 
 - 1 对`Graph`视图的所有操作，最终都会转换成其关联的`Table`视图的`RDD`操作来完成。一个图的计算在逻辑上等价于一系列`RDD`的转换过程。因此，`Graph`最终具备了`RDD`的3个关键特性：不变性、分布性和容错性。其中最关键的是不变性。逻辑上，所有图的转换和操作都产生了一个新图；物理上，`GraphX`会有一定程度的不变顶点和边的复用优化，对用户透明。
 
-- 2 两种视图底层共用的物理数据，由`RDD[Vertex-Partition]`和`RDD[EdgePartition]`这两个`RDD`组成。点和边实际都不是以表`Collection[tuple]`的形式存储的，而是由`VertexPartition/EdgePartition`在内部存储一个带索引结构的分片数据块，以加速不同视图下的遍历速度。不变的索引结构在`RDD`转换过程中是共用的，降低了计算和存储开销。
+- 2 两种视图底层共用的物理数据，由`RDD[VertexPartition]`和`RDD[EdgePartition]`这两个`RDD`组成。点和边实际都不是以表`Collection[tuple]`的形式存储的，而是由`VertexPartition/EdgePartition`在内部存储一个带索引结构的分片数据块，以加速不同视图下的遍历速度。不变的索引结构在`RDD`转换过程中是共用的，降低了计算和存储开销。
 
 - 3 图的分布式存储采用点分割模式，而且使用`partitionBy`方法，由用户指定不同的划分策略。下一章会具体讲到划分策略。
 
-## 4 参考文献
+## 5 参考文献
 
 【1】[spark graphx参考文献](https://github.com/endymecy/spark-programming-guide-zh-cn/tree/master/graphx-programming-guide)
 
