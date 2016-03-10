@@ -1,10 +1,15 @@
 # spark-graphx-knowledge
 
-&emsp;&emsp;本专题旨在介绍`spark graphx`的实现原理，并对`spark graphx`的结构以及部分操作作详细分析。本专题介绍的内容如下：
+&emsp;&emsp;本专题旨在介绍`spark graphx`的实现原理，并对`spark graphx`的结构以及部分操作作详细分析。
+
+&emsp;&emsp;本专题介绍的内容如下：
+
 
 * [分布式图计算](parallel-graph-system.md)
 
-* [GraphX的实现原理](graphx-introduce.md)
+* [GraphX简介](graphx-introduce.md)
+
+* [GraphX点切分详解]()
 
 * [GraphX的图运算操作分析](operators/readme.md)
 
