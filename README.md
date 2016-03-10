@@ -9,7 +9,7 @@
 
 * [GraphX简介](graphx-introduce.md)
 
-* [GraphX点切分详解]()
+* [GraphX点切分详解](vertex-cut.md)
 
 * [GraphX的图运算操作分析](operators/readme.md)
 

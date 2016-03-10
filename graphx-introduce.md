@@ -33,11 +33,12 @@
 
 ## 2 弹性分布式属性图
 
-&emsp;&emsp;[属性图](https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.graphx.Graph)是一个有向多重图，它带有连接到每个顶点和边的用户定义的对象。
+&emsp;&emsp;`GraphX`的核心抽象是[弹性分布式属性图](https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.graphx.Graph)，它是一个有向多重图，带有连接到每个顶点和边的用户定义的对象。
 有向多重图中多个并行的边共享相同的源和目的顶点。支持并行边的能力简化了建模场景，相同的顶点可能存在多种关系(例如`co-worker`和`friend`)。
 每个顶点用一个唯一的64位长的标识符（`VertexID`）作为`key`。`GraphX`并没有对顶点标识强加任何排序。同样，边拥有相应的源和目的顶点标识符。
 
-&emsp;&emsp;属性图通过`vertex(VD)`和`edge(ED)`类型参数化，这些类型分别是顶点和边相关联的对象的类型。
+&emsp;&emsp;属性图扩展了`Spark RDD`的抽象，有`Table`和`Graph`两种视图，但是只需要一份物理存储。两种视图都有自己独有的操作符，从而获得了灵活操作和执行效率。
+属性图以`vertex(VD)`和`edge(ED)`类型作为参数类型，这些类型分别是顶点和边相关联的对象的类型。
 
 &emsp;&emsp;在某些情况下，在同样的图中，我们可能希望拥有不同属性类型的顶点。这可以通过继承完成。例如，将用户和产品建模成一个二分图，我们可以用如下方式：
 
@@ -145,3 +146,19 @@ val facts: RDD[String] =
     triplet.srcAttr._1 + " is the " + triplet.attr + " of " + triplet.dstAttr._1)
 facts.collect.foreach(println(_))
 ```
+
+# 3 GraphX底层设计的核心点
+
+- 1 对`Graph`视图的所有操作，最终都会转换成其关联的`Table`视图的`RDD`操作来完成。一个图的计算在逻辑上等价于一系列`RDD`的转换过程。因此，`Graph`最终具备了`RDD`的3个关键特性：不变性、分布性和容错性。其中最关键的是不变性。逻辑上，所有图的转换和操作都产生了一个新图；物理上，`GraphX`会有一定程度的不变顶点和边的复用优化，对用户透明。
+
+- 2 两种视图底层共用的物理数据，由`RDD[Vertex-Partition]`和`RDD[EdgePartition]`这两个`RDD`组成。点和边实际都不是以表`Collection[tuple]`的形式存储的，而是由`VertexPartition/EdgePartition`在内部存储一个带索引结构的分片数据块，以加速不同视图下的遍历速度。不变的索引结构在`RDD`转换过程中是共用的，降低了计算和存储开销。
+
+- 3 图的分布式存储采用点分割模式，而且使用`partitionBy`方法，由用户指定不同的划分策略。下一章会具体讲到划分策略。
+
+# 4 参考文献
+
+【1】[spark graphx参考文献](https://github.com/endymecy/spark-programming-guide-zh-cn/tree/master/graphx-programming-guide)
+
+【2】[快刀初试：Spark GraphX在淘宝的实践](http://www.csdn.net/article/2014-08-07/2821097)
+
+【3】[GraphX: Unifying Data-Parallel and Graph-Parallel](docs/graphx.pdf)
