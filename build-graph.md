@@ -296,7 +296,15 @@ def apply[VD: ClassTag](
 ## 2.3 生成Graph对象
 
 &emsp;&emsp;使用上述构建的`edgeRDD`和`vertexRDD`，通过`new GraphImpl(vertices, new ReplicatedVertexView(edges.asInstanceOf[EdgeRDDImpl[ED, VD]]))`就可以生成`Graph`对象。
+`ReplicatedVertexView`这个类用来管理运送(`shipping`)顶点属性到`EdgeRDD`的分区。当顶点属性只在一边时，它们可能需要部分的运送到边分区用来构造一个`triplet`视图，并且顶点属性有可能会更新。
+注意，在`ReplicatedVertexView`中不要保存一个对边的引用，因为在属性运送等级升级后，这个引用可能会发生改变。
 
+```scala
+class ReplicatedVertexView[VD: ClassTag, ED: ClassTag](
+    var edges: EdgeRDDImpl[ED, VD],
+    var hasSrcId: Boolean = false,
+    var hasDstId: Boolean = false) 
+```
 
 # 3 参考文献
 
