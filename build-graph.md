@@ -45,7 +45,7 @@ def fromEdges[VD: ClassTag, ED: ClassTag](
 
 &emsp;&emsp;从源代码看构建边`EdgeRDD`也分为三步，下图的例子详细说明了这些步骤。
 
-<div  align="center"><img src="imgs/4.1.png" width = "700" height = "370" alt="2.3" align="center" /></div><br />
+<div  align="center"><img src="imgs/4.1.png" width = "900" height = "500" alt="2.3" align="center" /></div><br />
 
 - **1** 从文件中加载信息，转换成`tuple`的形式,即`(srcId, dstId)`
 
