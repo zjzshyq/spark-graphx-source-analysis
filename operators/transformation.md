@@ -4,6 +4,8 @@
 
 ## 1 `mapVertices`
 
+&emsp;&emsp;`mapVertices`用来更新顶点属性。从图的构建那章我们知道，顶点属性保存在边分区中，所以我们需要改变的是边分区。
+
 ```scala
 override def mapVertices[VD2: ClassTag]
     (f: (VertexId, VD) => VD2)(implicit eq: VD =:= VD2 = null): Graph[VD2, ED] = {
@@ -89,7 +91,8 @@ def updateVertices(updates: VertexRDD[VD]): ReplicatedVertexView[VD, ED] = {
     new ReplicatedVertexView(newEdges, hasSrcId, hasDstId)
   }
 ```
-&emsp;&emsp;调用`shipVertexAttributes`生成一个`VertexAttributeBlock`，`VertexAttributeBlock`包含当前分区的顶点属性，这些属性可以在特定的边分区使用。
+&emsp;&emsp;`updateVertices`方法返回一个新的`ReplicatedVertexView`,它更新了边分区中顶点属性。我们看看它的实现过程。首先看`shipVertexAttributes`方法的调用。
+调用`shipVertexAttributes`方法会生成一个`VertexAttributeBlock`，`VertexAttributeBlock`包含当前分区的顶点属性，这些属性可以在特定的边分区使用。
 
 ```scala
 def shipVertexAttributes(
@@ -111,8 +114,27 @@ def shipVertexAttributes(
     }
   }
 ```
+&emsp;&emsp;获得新的顶点属性之后，我们就可以调用`EdgeRDD`更新边的属性了，如下面代码所示：
+
+```scala
+edgePartition.updateVertices(shippedVertsIter.flatMap(_._2.iterator))
+//更新EdgePartition的属性
+def updateVertices(iter: Iterator[(VertexId, VD)]): EdgePartition[ED, VD] = {
+    val newVertexAttrs = new Array[VD](vertexAttrs.length)
+    System.arraycopy(vertexAttrs, 0, newVertexAttrs, 0, vertexAttrs.length)
+    while (iter.hasNext) {
+      val kv = iter.next()
+      newVertexAttrs(global2local(kv._1)) = kv._2
+    }
+    new EdgePartition(
+      localSrcIds, localDstIds, data, index, global2local, local2global, newVertexAttrs,
+      activeSet)
+  }
+```
 
 ## 2 `mapEdges`
+
+&emsp;&emsp;`mapEdges`用来更新边属性。
 
 ```scala
  override def mapEdges[ED2: ClassTag](
@@ -124,7 +146,9 @@ def shipVertexAttributes(
 ```
 &emsp;&emsp;相比于`mapVertices`，`mapEdges`显然要简单得多，它只需要根据方法`f`生成新的`EdgeRDD`,然后再初始化即可。
 
-## 3 `mapTriplets`
+## 3 `mapTriplets`：用来更新边属性
+
+&emsp;&emsp;`mapTriplets`用来更新边属性。
 
 ```scala
 override def mapTriplets[ED2: ClassTag](
@@ -138,8 +162,33 @@ override def mapTriplets[ED2: ClassTag](
     new GraphImpl(vertices, replicatedVertexView.withEdges(newEdges))
   }
 ```
-&emsp;&emsp;这段代码中，`replicatedVertexView`调用`upgrade`方法修改当前的`ReplicatedVertexView`，使调用者可以访问到边信息。用`f`处理可以访问到的边，生成新的RDD，最后用新的数据初始化图。
+&emsp;&emsp;这段代码中，`replicatedVertexView`调用`upgrade`方法修改当前的`ReplicatedVertexView`，使调用者可以访问到指定级别的边信息（如只读到源顶点的属性）。
+
+```scala
+def upgrade(vertices: VertexRDD[VD], includeSrc: Boolean, includeDst: Boolean) {
+    //判断传递级别
+    val shipSrc = includeSrc && !hasSrcId
+    val shipDst = includeDst && !hasDstId
+    if (shipSrc || shipDst) {
+      val shippedVerts: RDD[(Int, VertexAttributeBlock[VD])] =
+        vertices.shipVertexAttributes(shipSrc, shipDst)
+          .setName("ReplicatedVertexView.upgrade(%s, %s) - shippedVerts %s %s (broadcast)".format(
+            includeSrc, includeDst, shipSrc, shipDst))
+          .partitionBy(edges.partitioner.get)
+      val newEdges = edges.withPartitionsRDD(edges.partitionsRDD.zipPartitions(shippedVerts) {
+        (ePartIter, shippedVertsIter) => ePartIter.map {
+          case (pid, edgePartition) =>
+            (pid, edgePartition.updateVertices(shippedVertsIter.flatMap(_._2.iterator)))
+        }
+      })
+      edges = newEdges
+      hasSrcId = includeSrc
+      hasDstId = includeDst
+    }
+  }
+```
+&emsp;&emsp;最后，用`f`处理边，生成新的`RDD`，最后用新的数据初始化图。
 
 ## 4 总结
 
-&emsp;&emsp;调用`mapVertices`,`mapEdges`和`mapTriplets`时，其内部的结构化索引（`Structural indices`）并不会发生变化，它们使用路由表重用数据。
+&emsp;&emsp;调用`mapVertices`,`mapEdges`和`mapTriplets`时，其内部的结构化索引（`Structural indices`）并不会发生变化，它们都重用路由表中的数据。
