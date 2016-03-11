@@ -274,7 +274,7 @@ private[graphx] def createRoutingTables(
 想象一下，重新分区后，新分区中的点可能来自于不同的边分区，所以一个点要找到边，就需要先确定边的分区号`pid`, 然后在确定的边分区中确定是`srcId`还是`dstId`, 这样就找到了边。
 新分区中保存`vids.trim().array, toBitSet(srcFlags(pid)), toBitSet(dstFlags(pid))`这样的记录。这里转换为`toBitSet`保存是为了节省空间。
 
-&emsp;&emsp;更加上文生成的`routingTables`,重新封装路由表里的数据结构为`ShippableVertexPartition`。`ShippableVertexPartition`会合并相同重复点的属性`attr`对象，补全缺失的`attr`对象。
+&emsp;&emsp;根据上文生成的`routingTables`,重新封装路由表里的数据结构为`ShippableVertexPartition`。`ShippableVertexPartition`会合并相同重复点的属性`attr`对象，补全缺失的`attr`对象。
 
 ```scala
 def apply[VD: ClassTag](
