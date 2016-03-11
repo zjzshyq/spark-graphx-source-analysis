@@ -117,6 +117,7 @@ def toEdgePartition: EdgePartition[ED, VD] = {
     val global2local = new GraphXPrimitiveKeyOpenHashMap[VertexId, Int]
     val local2global = new PrimitiveVector[VertexId]
     var vertexAttrs = Array.empty[VD]
+    //采用列式存储的方式，节省了空间
     if (edgeArray.length > 0) {
       index.update(edgeArray(0).srcId, 0)
       var currSrcId: VertexId = edgeArray(0).srcId
@@ -160,8 +161,146 @@ def toEdgePartition: EdgePartition[ED, VD] = {
 &emsp;&emsp;我们可以通过根据本地下标取`VertexId`，也可以根据`VertexId`取本地下标，取相应的属性。
 
 ```scala
-＃ 根据本地下标取VertexId
+// 根据本地下标取VertexId
 localSrcIds/localDstIds -> index -> local2global -> VertexId
-＃ 根据VertexId取本地下标，取属性
+// 根据VertexId取本地下标，取属性
 VertexId -> global2local -> index -> data -> attr object
 ```
+
+## 2.2 构建顶点`VertexRDD`
+
+&emsp;&emsp;紧接着上面构建边`RDD`的代码，我们看看方法`fromEdgeRDD`。
+
+```scala
+private def fromEdgeRDD[VD: ClassTag, ED: ClassTag](
+      edges: EdgeRDDImpl[ED, VD],
+      defaultVertexAttr: VD,
+      edgeStorageLevel: StorageLevel,
+      vertexStorageLevel: StorageLevel): GraphImpl[VD, ED] = {
+    val edgesCached = edges.withTargetStorageLevel(edgeStorageLevel).cache()
+    val vertices = VertexRDD.fromEdges(edgesCached, edgesCached.partitions.size, defaultVertexAttr)
+      .withTargetStorageLevel(vertexStorageLevel)
+    fromExistingRDDs(vertices, edgesCached)
+  }
+```
+&emsp;&emsp;从上面的代码我们可以知道，`GraphX`使用`VertexRDD.fromEdges`构建顶点`VertexRDD`。
+
+```scala
+def fromEdges[VD: ClassTag](
+      edges: EdgeRDD[_], numPartitions: Int, defaultVal: VD): VertexRDD[VD] = {
+    //1 创建路由表
+    val routingTables = createRoutingTables(edges, new HashPartitioner(numPartitions))
+    //2 根据路由表生成分区对象vertexPartitions
+    val vertexPartitions = routingTables.mapPartitions({ routingTableIter =>
+      val routingTable =
+        if (routingTableIter.hasNext) routingTableIter.next() else RoutingTablePartition.empty
+      Iterator(ShippableVertexPartition(Iterator.empty, routingTable, defaultVal))
+    }, preservesPartitioning = true)
+    //3 创建VertexRDDImpl对象
+    new VertexRDDImpl(vertexPartitions)
+  }
+```
+&emsp;&emsp;构建的过程分为三步，如上代码中的注释。它的构建过程如下图所示：
+
+<div  align="center"><img src="imgs/4.2.png" width = "900" height = "300" alt="4.2" align="center" /></div><br />
+
+- **1** 创建路由表
+
+&emsp;&emsp;为了能通过点找到边，每个点需要保存点到边的信息，这些信息保存在`RoutingTablePartition`中。
+
+```scala
+private[graphx] def createRoutingTables(
+      edges: EdgeRDD[_], vertexPartitioner: Partitioner): RDD[RoutingTablePartition] = {
+    // 将edge partition中的数据转换成RoutingTableMessage类型，
+    val vid2pid = edges.partitionsRDD.mapPartitions(_.flatMap(
+      Function.tupled(RoutingTablePartition.edgePartitionToMsgs)))
+      .setName("VertexRDD.createRoutingTables - vid2pid (aggregation)")
+  }
+```
+&emsp;&emsp;上述程序首先将边分区中的数据转换成`RoutingTableMessage`类型，即`tuple(VertexId,Int)`类型。
+
+```scala
+def edgePartitionToMsgs(pid: PartitionID, edgePartition: EdgePartition[_, _])
+    : Iterator[RoutingTableMessage] = {
+    val map = new GraphXPrimitiveKeyOpenHashMap[VertexId, Byte]
+    edgePartition.iterator.foreach { e =>
+      map.changeValue(e.srcId, 0x1, (b: Byte) => (b | 0x1).toByte)
+      map.changeValue(e.dstId, 0x2, (b: Byte) => (b | 0x2).toByte)
+    }
+    map.iterator.map { vidAndPosition =>
+      val vid = vidAndPosition._1
+      val position = vidAndPosition._2
+      toMessage(vid, pid, position)
+    }
+  }
+```
+&emsp;&emsp;根据代码，我们可以知道程序使用`int`的`32-31`比特位表示标志位，即`01: isSrcId ,10: isDstId`。`30-0`比特位表示边分区`ID`。这样做可以节省内存。
+`RoutingTableMessage`表达的信息是：顶点`id`和它相关联的边的分区`id`是放在一起的,所以任何时候，我们都可以通过`RoutingTableMessage`找到顶点关联的边。
+
+- **2** 根据路由表生成分区对象
+
+```scala
+private[graphx] def createRoutingTables(
+      edges: EdgeRDD[_], vertexPartitioner: Partitioner): RDD[RoutingTablePartition] = {
+    // 将edge partition中的数据转换成RoutingTableMessage类型，
+    val numEdgePartitions = edges.partitions.size
+    vid2pid.partitionBy(vertexPartitioner).mapPartitions(
+      iter => Iterator(RoutingTablePartition.fromMsgs(numEdgePartitions, iter)),
+      preservesPartitioning = true)
+  }
+```
+&emsp;&emsp;我们将第1步生成的`vid2pid`按照`edges`的分区数进行重新分区。我们看看`RoutingTablePartition.fromMsgs`方法。
+
+```scala
+ def fromMsgs(numEdgePartitions: Int, iter: Iterator[RoutingTableMessage])
+    : RoutingTablePartition = {
+    val pid2vid = Array.fill(numEdgePartitions)(new PrimitiveVector[VertexId])
+    val srcFlags = Array.fill(numEdgePartitions)(new PrimitiveVector[Boolean])
+    val dstFlags = Array.fill(numEdgePartitions)(new PrimitiveVector[Boolean])
+    for (msg <- iter) {
+      val vid = vidFromMessage(msg)
+      val pid = pidFromMessage(msg)
+      val position = positionFromMessage(msg)
+      pid2vid(pid) += vid
+      srcFlags(pid) += (position & 0x1) != 0
+      dstFlags(pid) += (position & 0x2) != 0
+    }
+    new RoutingTablePartition(pid2vid.zipWithIndex.map {
+      case (vids, pid) => (vids.trim().array, toBitSet(srcFlags(pid)), toBitSet(dstFlags(pid)))
+    })
+  }
+```
+&emsp;&emsp;该方法从`RoutingTableMessage`获取数据，将`vid`, 边`pid`, `isSrcId/isDstId`重新封装到`pid2vid，srcFlags，dstFlags`这三个数据结构中。它们表示当前顶点分区中的点在边分区的分布。
+想象一下，重新分区后，新分区中的点可能来自于不同的边分区，所以一个点要找到边，就需要先确定边的分区号`pid`, 然后在确定的边分区中确定是`srcId`还是`dstId`, 这样就找到了边。
+新分区中保存`vids.trim().array, toBitSet(srcFlags(pid)), toBitSet(dstFlags(pid))`这样的记录。这里转换为`toBitSet`保存是为了节省空间。
+
+&emsp;&emsp;更加上文生成的`routingTables`,重新封装路由表里的数据结构为`ShippableVertexPartition`。`ShippableVertexPartition`会合并相同重复点的属性`attr`对象，补全缺失的`attr`对象。
+
+```scala
+def apply[VD: ClassTag](
+      iter: Iterator[(VertexId, VD)], routingTable: RoutingTablePartition, defaultVal: VD,
+      mergeFunc: (VD, VD) => VD): ShippableVertexPartition[VD] = {
+    val map = new GraphXPrimitiveKeyOpenHashMap[VertexId, VD]
+    // 合并顶点
+    iter.foreach { pair =>
+      map.setMerge(pair._1, pair._2, mergeFunc)
+    }
+    // 不全缺失的属性值
+    routingTable.iterator.foreach { vid =>
+      map.changeValue(vid, defaultVal, identity)
+    }
+    new ShippableVertexPartition(map.keySet, map._values, map.keySet.getBitSet, routingTable)
+  }
+```
+
+## 2.3 生成Graph对象
+
+&emsp;&emsp;使用上述构建的`edgeRDD`和`vertexRDD`，通过`new GraphImpl(vertices, new ReplicatedVertexView(edges.asInstanceOf[EdgeRDDImpl[ED, VD]]))`就可以生成`Graph`对象。
+
+
+# 3 参考文献
+
+【1】[Graphx:构建graph和聚合消息](https://github.com/shijinkui/spark_study/blob/master/spark_graphx_analyze.markdown)
+
+
+
