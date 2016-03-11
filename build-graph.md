@@ -45,7 +45,7 @@ def fromEdges[VD: ClassTag, ED: ClassTag](
 
 &emsp;&emsp;从源代码看构建边`EdgeRDD`也分为三步，下图的例子详细说明了这些步骤。
 
-<div  align="center"><img src="imgs/4.1.png" width = "900" height = "500" alt="2.3" align="center" /></div><br />
+<div  align="center"><img src="imgs/4.1.png" width = "900" height = "450" alt="4.1" align="center" /></div><br />
 
 - **1** 从文件中加载信息，转换成`tuple`的形式,即`(srcId, dstId)`
 
@@ -153,4 +153,15 @@ def toEdgePartition: EdgePartition[ED, VD] = {
 
 &emsp;&emsp;`data`就是当前分区的`attr`属性数组。
 
-&emsp;&emsp;
+&emsp;&emsp;我们知道相同的`srcId`可能对应不同的`dstId`。按照`srcId`排序之后，相同的`srcId`会出现多行，如上图中的`index desc`部分。`index`中记录的是相同`srcId`中第一个出现的`srcId`与其下标。
+
+&emsp;&emsp;`local2global`记录的是所有的`VertexId`信息的数组。形如：`srcId,dstId,srcId,dstId,srcId,dstId,srcId,dstId`。其中会包含相同的`srcId`。即：当前分区所有`vertextId`的顺序实际值。
+
+&emsp;&emsp;我们可以通过根据本地下标取`VertexId`，也可以根据`VertexId`取本地下标，取相应的属性。
+
+```scala
+＃ 根据本地下标取VertexId
+localSrcIds/localDstIds -> index -> local2global -> VertexId
+＃ 根据VertexId取本地下标，取属性
+VertexId -> global2local -> index -> data -> attr object
+```
