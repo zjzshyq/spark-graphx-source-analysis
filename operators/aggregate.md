@@ -144,5 +144,5 @@ def aggregateMessagesEdgeScan[A: ClassTag](
 
 &emsp;&emsp;`Map`阶段的执行如下例所示：
 
-<div  align="center"><img src="imgs/graphx_aggmsg_map.png" width = "900" height = "300" alt="graphx_aggmsg_map" align="center" /></div><br />
+<div  align="center"><img src="imgs/5.1.png" width = "900" height = "300" alt="graphx_aggmsg_map" align="center" /></div><br />
 
