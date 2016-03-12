@@ -318,5 +318,7 @@ class ReplicatedVertexView[VD: ClassTag, ED: ClassTag](
 
 【1】[Graphx:构建graph和聚合消息](https://github.com/shijinkui/spark_study/blob/master/spark_graphx_analyze.markdown)
 
+【2】[spark源码](https://github.com/apache/spark)
+
 
 
