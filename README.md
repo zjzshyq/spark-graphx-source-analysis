@@ -12,7 +12,7 @@
 * [GraphX点切分存储](vertex-cut.md)
 * [GraphX中的vertices、edges以及triplets](vertex-edge-triple.md)
 * [Graph的构建](build-graph.md)
-* [GraphX的图运算操作](operators/transformation.md)
+* [GraphX的图运算操作](operators/readme.md)
     * [转换操作](operators/transformation.md)
     * [结构操作](operators/structure.md)
     * [关联操作](operators/join.md)
