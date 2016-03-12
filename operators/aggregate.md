@@ -140,9 +140,62 @@ def aggregateMessagesEdgeScan[A: ClassTag](
     }
   }
 ```
-&emsp;&emsp;每个点之间在发消息的时候是独立的，即：点单纯根据方向，向以相邻点的以`localId`为下标的数组中插数据，互相独立，可以并行运行。
+&emsp;&emsp;每个点之间在发消息的时候是独立的，即：点单纯根据方向，向以相邻点的以`localId`为下标的数组中插数据，互相独立，可以并行运行。`Map`阶段最后返回消息`RDD` `messages: RDD[(VertexId, VD2)]`
 
-&emsp;&emsp;`Map`阶段的执行如下例所示：
+&emsp;&emsp;`Map`阶段的执行流程如下例所示：
 
-<div  align="center"><img src="../imgs/5.1.png" width = "900" height = "300" alt="graphx_aggmsg_map" align="center" /></div><br />
+<div  align="center"><img src="../imgs/5.1.png" width = "900" height = "350" alt="graphx_aggmsg_map" align="center" /></div><br />
+
+### 1.2.2 Reduce阶段
+
+&emsp;&emsp;`Reduce`阶段的实现就是调用下面的代码
+
+```scala
+vertices.aggregateUsingIndex(preAgg, mergeMsg)
+override def aggregateUsingIndex[VD2: ClassTag](
+      messages: RDD[(VertexId, VD2)], reduceFunc: (VD2, VD2) => VD2): VertexRDD[VD2] = {
+    val shuffled = messages.partitionBy(this.partitioner.get)
+    val parts = partitionsRDD.zipPartitions(shuffled, true) { (thisIter, msgIter) =>
+      thisIter.map(_.aggregateUsingIndex(msgIter, reduceFunc))
+    }
+    this.withPartitionsRDD[VD2](parts)
+  }
+```
+&emsp;&emsp;上面的代码通过两步实现。
+
+- 1 对`messages`重新分区，分区器使用`VertexRDD`的`partitioner`。然后使用`zipPartitions`合并两个分区。
+
+- 2 对等合并`attr`, 聚合函数使用传入的`mergeMsg`函数
+
+```scala
+def aggregateUsingIndex[VD2: ClassTag](
+      iter: Iterator[Product2[VertexId, VD2]],
+      reduceFunc: (VD2, VD2) => VD2): Self[VD2] = {
+    val newMask = new BitSet(self.capacity)
+    val newValues = new Array[VD2](self.capacity)
+    iter.foreach { product =>
+      val vid = product._1
+      val vdata = product._2
+      val pos = self.index.getPos(vid)
+      if (pos >= 0) {
+        if (newMask.get(pos)) {
+          newValues(pos) = reduceFunc(newValues(pos), vdata)
+        } else { // otherwise just store the new value
+          newMask.set(pos)
+          newValues(pos) = vdata
+        }
+      }
+    }
+    this.withValues(newValues).withMask(newMask)
+  }
+```
+&emsp;&emsp;根据传参，我们知道上面的代码迭代的是`messagePartition`，并不是每个节点都会收到消息，所以`messagePartition`集合最小，迭代速度会快。
+
+&emsp;&emsp;这段代码表示，我们根据`vetexId`从`index`中取到其下标`pos`,再根据下标，从`values`中取到`attr`，存在`attr`就用`mergeMsg`合并`attr`，不存在就直接赋值。
+
+&emsp;&emsp;`Reduce`阶段的过程如下图所示：
+
+<div  align="center"><img src="../imgs/5.2.png" width = "900" height = "270" alt="graphx_aggmsg_map" align="center" /></div><br />
+
+# 2 `collectNeighbors`
 

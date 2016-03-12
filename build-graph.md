@@ -291,7 +291,15 @@ def apply[VD: ClassTag](
     }
     new ShippableVertexPartition(map.keySet, map._values, map.keySet.getBitSet, routingTable)
   }
+//ShippableVertexPartition定义
+ShippableVertexPartition[VD: ClassTag](
+val index: VertexIdToIndexMap,
+val values: Array[VD],
+val mask: BitSet,
+val routingTable: RoutingTablePartition)
 ```
+
+&emsp;&emsp;`map`就是映射`vertexId->attr`，`index`就是顶点集合，`values`就是顶点集对应的属性集，`mask`指顶点集的`BitSet`。
 
 ## 2.3 生成Graph对象
 
