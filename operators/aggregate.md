@@ -199,3 +199,89 @@ def aggregateUsingIndex[VD2: ClassTag](
 
 # 2 `collectNeighbors`
 
+&emsp;&emsp;该方法的作用是收集每个顶点的邻居顶点的顶点`id`和顶点属性。
+
+```scala
+ def collectNeighbors(edgeDirection: EdgeDirection): VertexRDD[Array[(VertexId, VD)]] = {
+    val nbrs = edgeDirection match {
+      case EdgeDirection.Either =>
+        graph.aggregateMessages[Array[(VertexId, VD)]](
+          ctx => {
+            ctx.sendToSrc(Array((ctx.dstId, ctx.dstAttr)))
+            ctx.sendToDst(Array((ctx.srcId, ctx.srcAttr)))
+          },
+          (a, b) => a ++ b, TripletFields.All)
+      case EdgeDirection.In =>
+        graph.aggregateMessages[Array[(VertexId, VD)]](
+          ctx => ctx.sendToDst(Array((ctx.srcId, ctx.srcAttr))),
+          (a, b) => a ++ b, TripletFields.Src)
+      case EdgeDirection.Out =>
+        graph.aggregateMessages[Array[(VertexId, VD)]](
+          ctx => ctx.sendToSrc(Array((ctx.dstId, ctx.dstAttr))),
+          (a, b) => a ++ b, TripletFields.Dst)
+      case EdgeDirection.Both =>
+        throw new SparkException("collectEdges does not support EdgeDirection.Both. Use" +
+          "EdgeDirection.Either instead.")
+    }
+    graph.vertices.leftJoin(nbrs) { (vid, vdata, nbrsOpt) =>
+      nbrsOpt.getOrElse(Array.empty[(VertexId, VD)])
+    }
+  } 
+```
+&emsp;&emsp;从上面的代码中，第一步是根据`EdgeDirection`来确定调用哪个`aggregateMessages`实现聚合操作。我们用满足条件`EdgeDirection.Either`的情况来说明。可以看到`aggregateMessages`的方式消息的函数为：
+
+```scala
+ctx => {
+         ctx.sendToSrc(Array((ctx.dstId, ctx.dstAttr)))
+         ctx.sendToDst(Array((ctx.srcId, ctx.srcAttr)))
+      },
+```
+&emsp;&emsp;这个函数在处理每条边时都会同时向源顶点和目的顶点发送消息，消息内容分别为`（目的顶点id，目的顶点属性）`、`（源顶点id，源顶点属性）`。为什么会这样处理呢？
+我们知道，每条边都由两个顶点组成，对于这个边，我需要向源顶点发送目的顶点的信息来记录它们之间的邻居关系，同理向目的顶点发送源顶点的信息来记录它们之间的邻居关系。
+
+&emsp;&emsp;`Merge`函数是一个集合合并操作，它合并同同一个顶点对应的所有目的顶点的信息。如下所示：
+
+```scala
+(a, b) => a ++ b
+```
+&emsp;&emsp;通过`aggregateMessages`获得包含邻居关系信息的`VertexRDD`后，把它和现有的`vertices`作`join`操作，得到每个顶点的邻居消息。
+
+# 3 `collectNeighborIds`
+
+&emsp;&emsp;该方法的作用是收集每个顶点的邻居顶点的顶点`id`。它的实现和`collectNeighbors`非常相同。
+
+```scala
+def collectNeighborIds(edgeDirection: EdgeDirection): VertexRDD[Array[VertexId]] = {
+    val nbrs =
+      if (edgeDirection == EdgeDirection.Either) {
+        graph.aggregateMessages[Array[VertexId]](
+          ctx => { ctx.sendToSrc(Array(ctx.dstId)); ctx.sendToDst(Array(ctx.srcId)) },
+          _ ++ _, TripletFields.None)
+      } else if (edgeDirection == EdgeDirection.Out) {
+        graph.aggregateMessages[Array[VertexId]](
+          ctx => ctx.sendToSrc(Array(ctx.dstId)),
+          _ ++ _, TripletFields.None)
+      } else if (edgeDirection == EdgeDirection.In) {
+        graph.aggregateMessages[Array[VertexId]](
+          ctx => ctx.sendToDst(Array(ctx.srcId)),
+          _ ++ _, TripletFields.None)
+      } else {
+        throw new SparkException("It doesn't make sense to collect neighbor ids without a " +
+          "direction. (EdgeDirection.Both is not supported; use EdgeDirection.Either instead.)")
+      }
+    graph.vertices.leftZipJoin(nbrs) { (vid, vdata, nbrsOpt) =>
+      nbrsOpt.getOrElse(Array.empty[VertexId])
+    }
+  } 
+```
+&emsp;&emsp;和`collectNeighbors`的实现不同的是，`aggregateMessages`函数中的`sendMsg`函数只发送顶点`Id`到源顶点和目的顶点。其它的实现基本一致。
+
+```scala
+ctx => { ctx.sendToSrc(Array(ctx.dstId)); ctx.sendToDst(Array(ctx.srcId)) }
+```
+
+# 4 参考文献
+
+【1】[Graphx:构建graph和聚合消息](https://github.com/shijinkui/spark_study/blob/master/spark_graphx_analyze.markdown)
+
+【2】[spark源码](https://github.com/apache/spark)
