@@ -91,7 +91,7 @@ def updateVertices(updates: VertexRDD[VD]): ReplicatedVertexView[VD, ED] = {
     new ReplicatedVertexView(newEdges, hasSrcId, hasDstId)
   }
 ```
-&emsp;&emsp;`updateVertices`方法返回一个新的`ReplicatedVertexView`,它更新了边分区中顶点属性。我们看看它的实现过程。首先看`shipVertexAttributes`方法的调用。
+&emsp;&emsp;`updateVertices`方法返回一个新的`ReplicatedVertexView`,它更新了边分区中包含的顶点属性。我们看看它的实现过程。首先看`shipVertexAttributes`方法的调用。
 调用`shipVertexAttributes`方法会生成一个`VertexAttributeBlock`，`VertexAttributeBlock`包含当前分区的顶点属性，这些属性可以在特定的边分区使用。
 
 ```scala
