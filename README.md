@@ -18,4 +18,5 @@
     * [关联操作](operators/join.md)
     * [聚合操作](operators/aggregate.md)
     * [缓存操作](operators/cache.md)
+* [GraphX Pregel API](pregel-api.md)
 
