@@ -92,7 +92,7 @@ var activeMessages = messages.count()
 ```
 &emsp;&emsp;注意，在上面的代码中，`mapReduceTriplets`多了一个参数`Some((oldMessages, activeDirection))`。这个参数的作用是：它使我们在发送新的消息时，会忽略掉那些两端都没有接收到消息的边，减少计算量。
 
-# pregel实现最短路径
+# 2 pregel实现最短路径
 
 ```scala
 import org.apache.spark.graphx._
@@ -124,6 +124,6 @@ println(sssp.vertices.collect.mkString("\n"))
 
 &emsp;&emsp;`Send Message`函数中，会首先比较`triplet.srcAttr + triplet.attr`和`triplet.dstAttr`，即比较加上边的属性后，这个值是否小于目的节点的属性，如果小于，则发送消息到目的顶点。
 
-# 2 参考文献
+# 3 参考文献
 
 【1】[spark源码](https://github.com/apache/spark)
