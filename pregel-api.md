@@ -4,8 +4,8 @@
 一系列的图并发(`graph-parallel`)抽象已经被提出来用来表达这些迭代算法。`GraphX`公开了一个类似`Pregel`的操作，它是广泛使用的`Pregel`和`GraphLab`抽象的一个融合。
 
 &emsp;&emsp;`GraphX`中实现的这个更高级的`Pregel`操作是一个约束到图拓扑的批量同步（`bulk-synchronous`）并行消息抽象。`Pregel`操作者执行一系列的超步（`super steps`），在这些步骤中，顶点从
-之前的超步中接收进入(`inbound`)消息的总和，为顶点属性计算一个新的值，然后在以后的超步中发送消息到邻居顶点。不像`Pregel`而更像`GraphLab`，消息作为一个边三元组的函数被并行
-计算，消息计算既访问了源顶点特征也访问了目的顶点特征。在超步中，没有收到消息的顶点被跳过。当没有消息遗留时，`Pregel`操作停止迭代并返回最终的图。
+之前的超步中接收进入(`inbound`)消息的总和，为顶点属性计算一个新的值，然后在以后的超步中发送消息到邻居顶点。不像`Pregel`而更像`GraphLab`，消息通过边`triplet`的一个函数被并行计算，
+消息的计算既会访问源顶点特征也会访问目的顶点特征。在超步中，没有收到消息的顶点会被跳过。当没有消息遗留时，`Pregel`操作停止迭代并返回最终的图。
 
 &emsp;&emsp;注意，与标准的`Pregel`实现不同的是，`GraphX`中的顶点仅仅能发送信息给邻居顶点，并且可以利用用户自定义的消息函数并行地构造消息。这些限制允许对`GraphX`进行额外的优化。
 
@@ -43,7 +43,7 @@ def apply[VD: ClassTag, ED: ClassTag, A: ClassTag]
     g
   } 
 ```
-# 1 pregel计算模型
+## 1 pregel计算模型
 
 &emsp;&emsp;`Pregel`计算模型中有三个重要的函数，分别是`vertexProgram`、`sendMessage`和`messageCombiner`。
 
@@ -92,7 +92,7 @@ var activeMessages = messages.count()
 ```
 &emsp;&emsp;注意，在上面的代码中，`mapReduceTriplets`多了一个参数`Some((oldMessages, activeDirection))`。这个参数的作用是：它使我们在发送新的消息时，会忽略掉那些两端都没有接收到消息的边，减少计算量。
 
-# 2 pregel实现最短路径
+## 2 pregel实现最短路径
 
 ```scala
 import org.apache.spark.graphx._
@@ -124,6 +124,6 @@ println(sssp.vertices.collect.mkString("\n"))
 
 &emsp;&emsp;`Send Message`函数中，会首先比较`triplet.srcAttr + triplet.attr`和`triplet.dstAttr`，即比较加上边的属性后，这个值是否小于目的节点的属性，如果小于，则发送消息到目的顶点。
 
-# 3 参考文献
+## 3 参考文献
 
 【1】[spark源码](https://github.com/apache/spark)
