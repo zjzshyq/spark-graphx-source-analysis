@@ -148,7 +148,12 @@ def Scatter(v, j) = A(v).PR / A(v).NumLinks
 
 &emsp;&emsp;由于`gather/scatter`函数是以单条边为操作粒度，所以对于一个顶点的众多邻边，可以分别由相应的节点独立调用`gather/scatter`函数。这一设计主要是为了适应点分割的图存储模式，从而避免`Pregel`模型会遇到的问题。
 
-# 3 参考文献
+# 3 GraphX
+
+&emsp;&emsp; `GraphX`也是基于`BSP`模式。`GraphX`公开了一个类似`Pregel`的操作，它是广泛使用的`Pregel`和`GraphLab`抽象的一个融合。在`GraphX`中，`Pregel`操作者执行一系列的超步，在这些超步中，顶点从之前的超步中接收进入(`inbound`)消息，为顶点属性计算一个新的值，然后在以后的超步中发送消息到邻居顶点。
+不像`Pregel`而更像`GraphLab`，消息作为一个边三元组的函数被并行计算，消息计算既访问了源顶点特征也访问了目的顶点特征。在超步中，没有收到消息的顶点被跳过。当没有消息遗留时，`Pregel`操作停止迭代并返回最终的图。
+
+# 4 参考文献
 
 【1】[Preg el: A System for Larg e-Scale Graph Processing](docs/pregel-a_system_for_large-scale_graph_processing.pdf)
 
