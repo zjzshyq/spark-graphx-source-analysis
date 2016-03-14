@@ -1,6 +1,6 @@
 # 图的构建
 
-&emsp;&emsp;`GraphX`的`Graph`对象是用户操作图的入口, 它包含了边(`edges`)、顶点(`vertices`)以及`triplets`三部分，当然这三部分都包含相应的属性，可以携带额外的信息。
+&emsp;&emsp;`GraphX`的`Graph`对象是用户操作图的入口。前面的章节我们介绍过，它包含了边(`edges`)、顶点(`vertices`)以及`triplets`三部分，并且这三部分都包含相应的属性，可以携带额外的信息。
 
 # 1 构建图的方法
 
@@ -45,7 +45,7 @@ def fromEdges[VD: ClassTag, ED: ClassTag](
 
 &emsp;&emsp;从源代码看构建边`EdgeRDD`也分为三步，下图的例子详细说明了这些步骤。
 
-<div  align="center"><img src="imgs/4.1.png" width = "900" height = "450" alt="4.1" align="center" /></div><br />
+<div  align="center"><img src="imgs/4.1.png" width = "900" height = "420" alt="4.1" align="center" /></div><br />
 
 - **1** 从文件中加载信息，转换成`tuple`的形式,即`(srcId, dstId)`
 
@@ -73,14 +73,10 @@ val edges = rawEdges.map(p => Edge(p._1, p._2, 1))
 
 - **3** 将`RDD[Edge[ED]]`进一步转化成`EdgeRDDImpl[ED, VD]`
  
-&emsp;&emsp;第二步构建`RDD[Edge[ED]]`之后，`GraphX`做了如下操作用来构建`Graph`。
+&emsp;&emsp;第二步构建完`RDD[Edge[ED]]`之后，`GraphX`通过调用`GraphImpl`的`apply`方法来构建`Graph`。
 
 ```scala
 val graph = GraphImpl(edges, defaultValue, edgeStorageLevel, vertexStorageLevel)
-```
-&emsp;&emsp;该代码实际上是调用了`GraphImpl`对象的`apply`方法
-
-```scala
 def apply[VD: ClassTag, ED: ClassTag](
       edges: RDD[Edge[ED]],
       defaultVertexAttr: VD,
@@ -89,7 +85,7 @@ def apply[VD: ClassTag, ED: ClassTag](
     fromEdgeRDD(EdgeRDD.fromEdges(edges), defaultVertexAttr, edgeStorageLevel, vertexStorageLevel)
   }
 ```
-&emsp;&emsp;在`apply`调用`fromEdgeRDD`之前，代码调用`EdgeRDD.fromEdges(edges)`将`RDD[Edge[ED]]`进一步转化成`EdgeRDDImpl[ED, VD]`。
+&emsp;&emsp;在`apply`调用`fromEdgeRDD`之前，代码会调用`EdgeRDD.fromEdges(edges)`将`RDD[Edge[ED]]`转化成`EdgeRDDImpl[ED, VD]`。
 
 ```scala
 def fromEdges[ED: ClassTag, VD: ClassTag](edges: RDD[Edge[ED]]): EdgeRDDImpl[ED, VD] = {
