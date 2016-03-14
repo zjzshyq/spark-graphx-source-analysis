@@ -307,8 +307,8 @@ val routingTable: RoutingTablePartition)
 
 ## 2.3 生成Graph对象
 
-&emsp;&emsp;使用上述构建的`edgeRDD`和`vertexRDD`，使用`new GraphImpl(vertices, new ReplicatedVertexView(edges.asInstanceOf[EdgeRDDImpl[ED, VD]]))`就可以生成`Graph`对象。
-`ReplicatedVertexView`是点和边的视图，用来管理运送(`shipping`)顶点属性到`EdgeRDD`的分区。当顶点属性改变时，我们需要运送它们到边分区来更新保存在边分区的属性。
+&emsp;&emsp;使用上述构建的`edgeRDD`和`vertexRDD`，使用 `new GraphImpl(vertices, new ReplicatedVertexView(edges.asInstanceOf[EdgeRDDImpl[ED, VD]]))` 就可以生成`Graph`对象。
+`ReplicatedVertexView`是点和边的视图，用来管理运送(`shipping`)顶点属性到`EdgeRDD`的分区。当顶点属性改变时，我们需要运送它们到边分区来更新保存在边分区的顶点属性。
 注意，在`ReplicatedVertexView`中不要保存一个对边的引用，因为在属性运送等级升级后，这个引用可能会发生改变。
 
 ```scala
