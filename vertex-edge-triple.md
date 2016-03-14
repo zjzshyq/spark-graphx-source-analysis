@@ -63,9 +63,9 @@ case class Edge[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) ED] 
 ```
 &emsp;&emsp;`Edge`类中包含源顶点`id`，目标顶点`id`以及边的属性。所以从源代码中我们可以知道，`triplets`既包含了边属性也包含了源顶点的`id`和属性、目标顶点的`id`和属性。
 
+## 4 参考文献
 
-
-
+【1】[spark源码](https://github.com/apache/spark)
 
 
 
