@@ -32,7 +32,7 @@ case object CanonicalRandomVertexCut extends PartitionStrategy {
     }
   }
 ```
-&emsp;&emsp;这种分割方法和前一种方法没有本质的不同。不同的是，哈希值的产生带有确定的方向（即两个顶点较小属性值在前）。两个顶点之间所有的边都会分配到同一个分区，而不管方向如何。
+&emsp;&emsp;这种分割方法和前一种方法没有本质的不同。不同的是，哈希值的产生带有确定的方向（即两个顶点中较小`id`的顶点在前）。两个顶点之间所有的边都会分配到同一个分区，而不管方向如何。
 
 ## 3 EdgePartition1D
 
