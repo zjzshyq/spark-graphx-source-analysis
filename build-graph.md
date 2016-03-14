@@ -127,6 +127,7 @@ def toEdgePartition: EdgePartition[ED, VD] = {
         localDstIds(i) = global2local.changeValue(dstId,
           { currLocalId += 1; local2global += dstId; currLocalId }, identity)
         data(i) = edgeArray(i).attr
+        //相同顶点srcId中第一个出现的srcId与其下标
         if (srcId != currSrcId) {
           currSrcId = srcId
           index.update(currSrcId, i)
@@ -167,7 +168,7 @@ VertexId -> global2local -> index -> data -> attr object
 
 ## 2.2 构建顶点`VertexRDD`
 
-&emsp;&emsp;紧接着上面构建边`RDD`的代码，我们看看方法`fromEdgeRDD`。
+&emsp;&emsp;紧接着上面构建边`RDD`的代码，我们看看方法`fromEdgeRDD`的实现。
 
 ```scala
 private def fromEdgeRDD[VD: ClassTag, ED: ClassTag](
@@ -181,7 +182,7 @@ private def fromEdgeRDD[VD: ClassTag, ED: ClassTag](
     fromExistingRDDs(vertices, edgesCached)
   }
 ```
-&emsp;&emsp;从上面的代码我们可以知道，`GraphX`使用`VertexRDD.fromEdges`构建顶点`VertexRDD`。
+&emsp;&emsp;从上面的代码我们可以知道，`GraphX`使用`VertexRDD.fromEdges`构建顶点`VertexRDD`，当然我们把边`RDD`作为参数传入。
 
 ```scala
 def fromEdges[VD: ClassTag](
@@ -198,9 +199,9 @@ def fromEdges[VD: ClassTag](
     new VertexRDDImpl(vertexPartitions)
   }
 ```
-&emsp;&emsp;构建的过程分为三步，如上代码中的注释。它的构建过程如下图所示：
+&emsp;&emsp;构建顶点`VertexRDD`的过程分为三步，如上代码中的注释。它的构建过程如下图所示：
 
-<div  align="center"><img src="imgs/4.2.png" width = "900" height = "300" alt="4.2" align="center" /></div><br />
+<div  align="center"><img src="imgs/4.2.png" width = "900" height = "280" alt="4.2" align="center" /></div><br />
 
 - **1** 创建路由表
 
@@ -212,7 +213,6 @@ private[graphx] def createRoutingTables(
     // 将edge partition中的数据转换成RoutingTableMessage类型，
     val vid2pid = edges.partitionsRDD.mapPartitions(_.flatMap(
       Function.tupled(RoutingTablePartition.edgePartitionToMsgs)))
-      .setName("VertexRDD.createRoutingTables - vid2pid (aggregation)")
   }
 ```
 &emsp;&emsp;上述程序首先将边分区中的数据转换成`RoutingTableMessage`类型，即`tuple(VertexId,Int)`类型。
@@ -231,6 +231,12 @@ def edgePartitionToMsgs(pid: PartitionID, edgePartition: EdgePartition[_, _])
       toMessage(vid, pid, position)
     }
   }
+//`30-0`比特位表示边分区`ID`,`32-31`比特位表示标志位
+private def toMessage(vid: VertexId, pid: PartitionID, position: Byte): RoutingTableMessage = {
+    val positionUpper2 = position << 30
+    val pidLower30 = pid & 0x3FFFFFFF
+    (vid, positionUpper2 | pidLower30)
+  }
 ```
 &emsp;&emsp;根据代码，我们可以知道程序使用`int`的`32-31`比特位表示标志位，即`01: isSrcId ,10: isDstId`。`30-0`比特位表示边分区`ID`。这样做可以节省内存。
 `RoutingTableMessage`表达的信息是：顶点`id`和它相关联的边的分区`id`是放在一起的,所以任何时候，我们都可以通过`RoutingTableMessage`找到顶点关联的边。
@@ -247,7 +253,7 @@ private[graphx] def createRoutingTables(
       preservesPartitioning = true)
   }
 ```
-&emsp;&emsp;我们将第1步生成的`vid2pid`按照`edges`的分区数进行重新分区。我们看看`RoutingTablePartition.fromMsgs`方法。
+&emsp;&emsp;我们将第1步生成的`vid2pid`按照`HashPartitioner`重新分区。我们看看`RoutingTablePartition.fromMsgs`方法。
 
 ```scala
  def fromMsgs(numEdgePartitions: Int, iter: Iterator[RoutingTableMessage])
@@ -301,8 +307,8 @@ val routingTable: RoutingTablePartition)
 
 ## 2.3 生成Graph对象
 
-&emsp;&emsp;使用上述构建的`edgeRDD`和`vertexRDD`，通过`new GraphImpl(vertices, new ReplicatedVertexView(edges.asInstanceOf[EdgeRDDImpl[ED, VD]]))`就可以生成`Graph`对象。
-`ReplicatedVertexView`是点和边的视图，用来管理运送(`shipping`)顶点属性到`EdgeRDD`的分区。当顶点属性只在一边时，它们可能需要部分的运送到边分区用来构造一个`triplet`视图，并且顶点属性有可能会更新。
+&emsp;&emsp;使用上述构建的`edgeRDD`和`vertexRDD`，使用`new GraphImpl(vertices, new ReplicatedVertexView(edges.asInstanceOf[EdgeRDDImpl[ED, VD]]))`就可以生成`Graph`对象。
+`ReplicatedVertexView`是点和边的视图，用来管理运送(`shipping`)顶点属性到`EdgeRDD`的分区。当顶点属性改变时，我们需要运送它们到边分区来更新保存在边分区的属性。
 注意，在`ReplicatedVertexView`中不要保存一个对边的引用，因为在属性运送等级升级后，这个引用可能会发生改变。
 
 ```scala
