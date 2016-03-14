@@ -106,27 +106,27 @@ if (converged(A(v).PR)) voteToHalt(v)
 
 ### 2.3.1 `GraphLab`框架的数据模型
 
-&emsp;&emsp;对于分割的某个顶点，其被部署到多台机器，一台机器作为`master`顶点，其余机器作为`mirror`。`Master`作为所有`mirror`的管理者，负责给`mirror`安排具体计算任务;`mirror`作为该顶点在各台机器上的代理执行者，与`master`数据的保持同步。
+&emsp;&emsp;对于分割的某个顶点，它会被部署到多台机器，一台机器作为`master`顶点，其余机器作为`mirror`。`master`作为所有`mirror`的管理者，负责给`mirror`安排具体计算任务;`mirror`作为该顶点在各台机器上的代理执行者，与`master`数据的保持同步。
 
 &emsp;&emsp;对于某条边，`GraphLab`将其唯一部署在某一台机器上，而对边关联的顶点进行多份存储，解决了边数据量大的问题。
 
-&emsp;&emsp;同一台机器上的所有`edge`和`vertex`构成一个`local graph`,在每台机器上，存在一份本地`id`到全局`id`的映射表。`vertex`是一个进程上所有线程共享的，在并行计算过程中，各个线程分摊进程中所有顶点的`gather->apply->scatter`操作。
+&emsp;&emsp;同一台机器上的所有顶点和边构成一个本地图（`local graph）`,在每台机器上，存在一份本地`id`到全局`id`的映射表。顶点是一个进程上所有线程共享的，在并行计算过程中，各个线程分摊进程中所有顶点的`gather->apply->scatter`操作。
 
-&emsp;&emsp;我们用下面这个例子说明，`GraphLab`是怎么构建`Graph`的。图中，以顶点`v2`和`v3`进行分割。
+&emsp;&emsp;我们用下面这个例子说明，`GraphLab`是怎么构建`Graph`的。图中，以顶点`v2`和`v3`进行分割。顶点`v2`和`v3`同时存在于两个进程中，并且两个线程共同分担顶点计算。
 
 <div  align="center"><img src="imgs/1.5.png" width = "550" height = "430" alt="1.5" align="center" /></div><br />
 
 ### 2.3.2 `GraphLab`框架的执行模型
 
-&emsp;&emsp;每个顶点每一轮迭代经过`gather->apple->scatter`三个阶段。
+&emsp;&emsp;每个顶点每一轮迭代会经过`gather -> apple -> scatter`三个阶段。
 
-- 1 **Gather阶段**，工作顶点的边从连接顶点和自身收集数据。这一阶段对工作顶点、边都是只读的。
+- **Gather阶段**，工作顶点的边从连接顶点和自身收集数据。这一阶段对工作顶点、边都是只读的。
 
-- 2 **Apply阶段**，`Mirror`将`gather`计算的结果发送给`master`顶点，`master`进行汇总并结合上一步的顶点数据，按照业务需求进行进一步的计算，然后更新`master`的顶点数据，并同步给`mirror`。`Apply`阶段中，工作顶点可修改，边不可修改。
+- **Apply阶段**，`mirror`将`gather`阶段计算的结果发送给`master`顶点，`master`进行汇总并结合上一步的顶点数据，按照业务需求进行进一步的计算，然后更新`master`的顶点数据，并同步给`mirror`。`Apply`阶段中，工作顶点可修改，边不可修改。
 
-- 3 **Scatter阶段**，工作顶点更新完成之后，更新边上的数据，并通知对其有依赖的邻结顶点更新状态。这`scatter`过程中，工作顶点只读，边上数据可写。
+- **Scatter阶段**，工作顶点更新完成之后，更新边上的数据，并通知对其有依赖的邻结顶点更新状态。在`scatter`过程中，工作顶点只读，边上数据可写。
 
-&emsp;&emsp;在执行模型中，`graphlab`通过控制三个阶段的读写权限来达到互斥的目的。在`gather`阶段只读，`apply`对顶点只写，`scatter`对边只写。并行计算的同步通过`master`和`mirror`来实现，`mirror`相当于每个顶点对外的一个接口人，将复杂的数据通信抽象成顶点的行为。
+&emsp;&emsp;在执行模型中，`GraphLab`通过控制三个阶段的读写权限来达到互斥的目的。在`gather`阶段只读，`apply`对顶点只写，`scatter`对边只写。并行计算的同步通过`master`和`mirror`来实现，`mirror`相当于每个顶点对外的一个接口人，将复杂的数据通信抽象成顶点的行为。
 
 &emsp;&emsp;下面这个例子说明`GraphLab`的执行模型：
 
