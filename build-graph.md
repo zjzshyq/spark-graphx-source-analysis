@@ -140,11 +140,13 @@ def toEdgePartition: EdgePartition[ED, VD] = {
       None)
   }
 ```
-&emsp;&emsp;`toEdgePartition`的第一步就是对边进行排序，即按照`srcId`从小到大排序。排序是为了遍历时顺序访问，加快访问速度。采用数组而不是`Map`，是因为数组是连续的内存单元，具有原子性，避免了`Map`的`hash`问题，访问速度快
+- `toEdgePartition`的第一步就是对边进行排序。
 
-&emsp;&emsp;`toEdgePartition`的第二步就是填充`localSrcIds,localDstIds, data, index, global2local, local2global, vertexAttrs`。
+&emsp;&emsp;按照`srcId`从小到大排序。排序是为了遍历时顺序访问，加快访问速度。采用数组而不是`Map`，是因为数组是连续的内存单元，具有原子性，避免了`Map`的`hash`问题，访问速度快。
 
-&emsp;&emsp;数组`localSrcIds,localDstIds`中保存的是通过`global2local.changeValue(srcId/dstId)`转换而成的本地索引。`localSrcIds、localDstIds`数组中保存的索引位可以通过`local2global`查到具体的`VertexId`。
+- `toEdgePartition`的第二步就是填充`localSrcIds,localDstIds, data, index, global2local, local2global, vertexAttrs`。
+
+&emsp;&emsp;数组`localSrcIds,localDstIds`中保存的是通过`global2local.changeValue(srcId/dstId)`转换而成的分区本地索引。可以通过`localSrcIds、localDstIds`数组中保存的索引位从`local2global`中查到具体的`VertexId`。
 
 &emsp;&emsp;`global2local`是一个简单的，`key`值非负的快速`hash map`：`GraphXPrimitiveKeyOpenHashMap`, 保存`vertextId`和本地索引的映射关系。`global2local`中包含当前`partition`所有`srcId`、`dstId`与本地索引的映射关系。
 
