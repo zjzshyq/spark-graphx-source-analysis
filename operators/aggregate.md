@@ -197,6 +197,34 @@ def aggregateUsingIndex[VD2: ClassTag](
 
 <div  align="center"><img src="../imgs/5.2.png" width = "900" height = "270" alt="graphx_aggmsg_map" align="center" /></div><br />
 
+## 1.3 举例
+
+&emsp;&emsp;下面的例子计算比用户年龄大的追随者（即`followers`）的平均年龄。
+
+```scala
+// Import random graph generation library
+import org.apache.spark.graphx.util.GraphGenerators
+// Create a graph with "age" as the vertex property.  Here we use a random graph for simplicity.
+val graph: Graph[Double, Int] =
+  GraphGenerators.logNormalGraph(sc, numVertices = 100).mapVertices( (id, _) => id.toDouble )
+// Compute the number of older followers and their total age
+val olderFollowers: VertexRDD[(Int, Double)] = graph.aggregateMessages[(Int, Double)](
+  triplet => { // Map Function
+    if (triplet.srcAttr > triplet.dstAttr) {
+      // Send message to destination vertex containing counter and age
+      triplet.sendToDst(1, triplet.srcAttr)
+    }
+  },
+  // Add counter and age
+  (a, b) => (a._1 + b._1, a._2 + b._2) // Reduce Function
+)
+// Divide total age by number of older followers to get average age of older followers
+val avgAgeOfOlderFollowers: VertexRDD[Double] =
+  olderFollowers.mapValues( (id, value) => value match { case (count, totalAge) => totalAge / count } )
+// Display the results
+avgAgeOfOlderFollowers.collect.foreach(println(_))
+```
+
 # 2 `collectNeighbors`
 
 &emsp;&emsp;该方法的作用是收集每个顶点的邻居顶点的顶点`id`和顶点属性。
