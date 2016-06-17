@@ -188,6 +188,13 @@ validGraph.vertices.collect.foreach(println(_))
 validGraph.triplets.map(
     triplet => triplet.srcAttr._1 + " is the " + triplet.attr + " of " + triplet.dstAttr._1
   ).collect.foreach(println(_))
+
+/ Run Connected Components
+val ccGraph = graph.connectedComponents() // No longer contains missing field
+// Remove missing vertices as well as the edges to connected to them
+val validGraph = graph.subgraph(vpred = (id, attr) => attr._2 != "Missing")
+// Restrict the answer to the valid subgraph
+val validCCGraph = ccGraph.mask(validGraph)
 ```
 
 ## 6 参考文献
