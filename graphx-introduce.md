@@ -78,9 +78,9 @@ abstract class EdgeRDD[ED](
 
 &emsp;&emsp;`Graphx`借鉴`PowerGraph`，使用的是`Vertex-Cut`( 点分割 ) 方式存储图，用三个`RDD`存储图数据信息：
 
-- `VertexTable(id, data)`：`id`为顶点`id`， `data`为边属性
+- `VertexTable(id, data)`：`id`为顶点`id`， `data`为顶点属性
 
-- `EdgeTable(pid, src, dst, data)`：`pid` 为分区`id` ，`src`为原顶点`id` ，`dst`为目的顶点`id`
+- `EdgeTable(pid, src, dst, data)`：`pid` 为分区`id` ，`src`为源顶点`id` ，`dst`为目的顶点`id`，`data`为边属性
 
 - `RoutingTable(id, pid)`：`id` 为顶点`id` ，`pid` 为分区`id`
 
