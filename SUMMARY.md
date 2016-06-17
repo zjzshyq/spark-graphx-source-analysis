@@ -10,3 +10,9 @@
     * [聚合操作](operators/aggregate.md)
     * [缓存操作](operators/cache.md)
 * [GraphX Pregel API](pregel-api.md)
+* [图算法实现]
+    * [宽度优先遍历](graphAlgorithm/BFS.md)
+    * [单源最短路径](graphAlgorithm/shortest_path.md)
+    * [连通组件](graphAlgorithm/ConnectedComponents.md)
+    * [三角计数](graphAlgorithm/TriangleCounting.md)
+    * [PageRank](graphAlgorithm/PageRank.md)
