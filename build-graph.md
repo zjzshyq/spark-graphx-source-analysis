@@ -88,15 +88,17 @@ def apply[VD: ClassTag, ED: ClassTag](
 &emsp;&emsp;在`apply`调用`fromEdgeRDD`之前，代码会调用`EdgeRDD.fromEdges(edges)`将`RDD[Edge[ED]]`转化成`EdgeRDDImpl[ED, VD]`。
 
 ```scala
+//从EdgeRDD到EdgeRDDImpl
 def fromEdges[ED: ClassTag, VD: ClassTag](edges: RDD[Edge[ED]]): EdgeRDDImpl[ED, VD] = {
-    val edgePartitions = edges.mapPartitionsWithIndex { (pid, iter) =>
-      val builder = new EdgePartitionBuilder[ED, VD]
-      iter.foreach { e =>
-        builder.add(e.srcId, e.dstId, e.attr)
+      //获取图1中的Index desc
+    val edgePartitions = edges.mapPartitionsWithIndex { (pid, iter) =>//单挑结构的形式(IndexId,srcID,dstID,attrID)
+      val builder = new EdgePartitionBuilder[ED, VD]
+      iter.foreach { e =>//iter包含（src，dst，attr）
+        builder.add(e.srcId, e.dstId, e.attr)//遍历分区，添加边
       }
-      Iterator((pid, builder.toEdgePartition))
-    }
-    EdgeRDD.fromEdgePartitions(edgePartitions)
+      Iterator((pid, builder.toEdgePartition))//用分区内的边构建表，toEdgePartition函数代码后面
+    }
+    EdgeRDD.fromEdgePartitions(edgePartitions)//完成EdgeRDDImpl
   }
 ```
 &emsp;&emsp;程序遍历`RDD[Edge[ED]]`的每个分区，并调用`builder.toEdgePartition`对分区内的边作相应的处理。
